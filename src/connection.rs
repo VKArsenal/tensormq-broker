@@ -1,6 +1,7 @@
 use bytes::BytesMut;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::{timeout, Duration};
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
 
@@ -30,7 +31,19 @@ pub async fn start_server(addr: &str, broker: Arc<Broker>) -> std::io::Result<()
 async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::io::Result<()> {
     let mut header_buf = [0u8; HEADER_SIZE];
     loop {
-        let bytes_read = socket.read_exact(&mut header_buf).await;
+
+        let read_result = timeout(
+            Duration::from_secs(60),
+            socket.read_exact(&mut header_buf)
+        ).await;
+
+        let bytes_read = match read_result {
+            Ok(result) => result,
+            Err(_) => {
+                println!("Connection timed out (no heartbeat). Dropping zombie client.");
+                return Ok(());
+            }
+        };
         match bytes_read {
             Ok(_) => {}
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
@@ -43,13 +56,13 @@ async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::i
         let mut buf_slice = &header_buf[..];
         let header = match Header::decode(&mut buf_slice) {
             Ok(h) => h,
-            Err(e) => {
-                eprintln!("Protocol Framing Error: {}", e);
-                return Err(Error::new(ErrorKind::InvalidData, e.to_string()));
-            }
+            Err(e) => return Err(Error::new(ErrorKind::InvalidData, e.to_string())),
         };
 
-        println!("Header Received: {:?}", header);
+        if header.msg_type == MsgType::Heartbeat {
+            println!("Heartbeat Received");
+            continue;
+        }
 
         let payload_size = (header.topic_len + header.meta_len) as usize + header.data_len as usize;
 
