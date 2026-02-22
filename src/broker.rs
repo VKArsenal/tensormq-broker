@@ -1,11 +1,15 @@
 use bytes::Bytes;
 use dashmap::DashMap;
-use std::sync::Arc;
 use tokio::sync::broadcast;
+
+use crate::protocol::MsgType;
 
 /// Parsed Tensor Message ready for routing.
 #[derive(Debug, Clone)]
 pub struct TensorMessage {
+    pub msg_type: MsgType,
+    pub flags: u8,
+    pub stream_id: u64,
     pub topic: String,
     pub meta: Bytes,
     pub tensor: Bytes,

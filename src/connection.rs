@@ -67,6 +67,9 @@ async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::i
 
             if header.msg_type == MsgType::Publish || header.msg_type == MsgType::TensorMeta || header.msg_type == MsgType::TensorChunk {
                 let msg = TensorMessage {
+                    msg_type: header.msg_type,
+                    flags: header.flags,
+                    stream_id: header.stream_id,
                     topic: topic_str,
                     meta: meta_bytes,
                     tensor: tensor_bytes,
@@ -83,9 +86,9 @@ async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::i
                             let mut out_header = BytesMut::with_capacity(HEADER_SIZE);
                             let h = Header {
                                 version: 2,
-                                msg_type: MsgType::Publish,
-                                flags: 0,
-                                stream_id: 0, // TODO: Make this dynamic
+                                msg_type: msg.msg_type,
+                                flags: msg.flags,
+                                stream_id: msg.stream_id,
                                 topic_len: msg.topic.len() as u32,
                                 meta_len: msg.meta.len() as u32,
                                 data_len: msg.tensor.len() as u64,
