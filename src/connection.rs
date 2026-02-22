@@ -65,7 +65,7 @@ async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::i
 
             let topic_str = String::from_utf8_lossy(&topic_bytes).to_string();
 
-            if header.msg_type == MsgType::Publish {
+            if header.msg_type == MsgType::Publish || header.msg_type == MsgType::TensorMeta || header.msg_type == MsgType::TensorChunk {
                 let msg = TensorMessage {
                     topic: topic_str,
                     meta: meta_bytes,
