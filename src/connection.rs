@@ -1,20 +1,25 @@
-use std::io::{Error, ErrorKind};
 use bytes::BytesMut;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
-use crate::protocol::{Header, HEADER_SIZE};
+use std::io::{Error, ErrorKind};
+use std::sync::Arc;
+
+use crate::protocol::{Header, HEADER_SIZE, MsgType};
+use crate::broker::{Broker, TensorMessage};
 
 /// Bind TCP listener and accept incoming connections.
-pub async fn start_server(addr: &str) -> std::io::Result<()> {
+pub async fn start_server(addr: &str, broker: Arc<Broker>) -> std::io::Result<()> {
     let listener = TcpListener::bind(addr).await?;
     println!("TensorMQ Broker listening on: {}", addr);
 
     loop {
-        let (socker, remote_addr) = listener.accept().await?;
+        let (socket, remote_addr) = listener.accept().await?;
         println!("Accepted connection from: {}", remote_addr);
 
+        let broker_clone = broker.clone();
+
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(socker).await {
+            if let Err(e) = handle_connection(socket, broker_clone).await {
                 eprintln!("Connection error from {}: {}", remote_addr, e);
             }
         });
@@ -22,8 +27,7 @@ pub async fn start_server(addr: &str) -> std::io::Result<()> {
 }
 
 /// Handle each individual client
-async fn handle_connection(mut socket: TcpStream) -> std::io::Result<()> {
-    // let mut buffer = BytesMut::with_capacity(8192);
+async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::io::Result<()> {
     let mut header_buf = [0u8; HEADER_SIZE];
     loop {
         let bytes_read = socket.read_exact(&mut header_buf).await;
@@ -59,13 +63,16 @@ async fn handle_connection(mut socket: TcpStream) -> std::io::Result<()> {
             let meta_bytes = payload_buf.split_to(header.meta_len as usize).freeze();
             let tensor_bytes = payload_buf.freeze();
 
-            let topic_str = String::from_utf8_lossy(&topic_bytes);
+            let topic_str = String::from_utf8_lossy(&topic_bytes).to_string();
 
-            println!("Topic: {}", topic_str);
-            println!("Meta Length: {} bytes", meta_bytes.len());
-            println!("Tensor Size: {} bytes", tensor_bytes.len());
-
-            // TODO: PUB SUB ROUTING
+            if header.msg_type == MsgType::Publish {
+                let msg = TensorMessage {
+                    topic: topic_str,
+                    meta: meta_bytes,
+                    tensor: tensor_bytes,
+                };
+                broker.publish(msg);
+            }
         }
     }
 }
