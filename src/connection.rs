@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
@@ -72,6 +72,39 @@ async fn handle_connection(mut socket: TcpStream, broker: Arc<Broker>) -> std::i
                     tensor: tensor_bytes,
                 };
                 broker.publish(msg);
+            } else if header.msg_type == MsgType::Subscribe {
+                println!("Client subscribed to: {}", topic_str);
+
+                let mut rx = broker.subscribe(&topic_str);
+
+                loop {
+                    match rx.recv().await {
+                        Ok(msg) => {
+                            let mut out_header = BytesMut::with_capacity(HEADER_SIZE);
+                            let h = Header {
+                                version: 2,
+                                msg_type: MsgType::Publish,
+                                flags: 0,
+                                stream_id: 0, // TODO: Make this dynamic
+                                topic_len: msg.topic.len() as u32,
+                                meta_len: msg.meta.len() as u32,
+                                data_len: msg.tensor.len() as u64,
+                            };
+                            h.encode(&mut out_header);
+
+                            socket.write_all(&out_header).await?;
+                            socket.write_all(msg.topic.as_bytes()).await?;
+                            socket.write_all(&msg.meta).await?;
+                            socket.write_all(&msg.tensor).await?;
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            eprintln!("Subscriber lagged and missed {} messages", n);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
