@@ -17,36 +17,74 @@ pub struct TensorMessage {
 
 /// Routing Engine
 pub struct Broker {
-    topics: DashMap<String, broadcast::Sender<TensorMessage>>,
+    exact_topics: DashMap<String, broadcast::Sender<TensorMessage>>,
+    pattern_topics: DashMap<String, broadcast::Sender<TensorMessage>>,
     channel_capacity: usize,
+}
+
+/// Matching topics against patterns
+fn matches_pattern(topic: &str, pattern: &str) -> bool {
+    let t_parts: Vec<&str> = topic.split('/').collect();
+    let p_parts: Vec<&str> = pattern.split('/').collect();
+
+    if t_parts.len() != p_parts.len() {
+        return false;
+    }
+    for (t, p) in t_parts.iter().zip(p_parts.iter()) {
+        if *p != "*" && t != p {
+            return false;
+        }
+    }
+    return true;
 }
 
 impl Broker {
     pub fn new(channel_capacity: usize) -> Self {
         Self {
-            topics: DashMap::new(),
+            exact_topics: DashMap::new(),
+            pattern_topics: DashMap::new(),
             channel_capacity,
         }
     }
 
-    pub fn subscribe(&self, topic: &str) -> broadcast::Receiver<TensorMessage> {
-        let sender = self.topics.entry(topic.to_string()).or_insert_with(|| {
-            let (tx, _rx) = broadcast::channel(self.channel_capacity);
-            tx
-        });
-        sender.subscribe()
+    pub fn subscribe(&self, topic_or_pattern: &str) -> broadcast::Receiver<TensorMessage> {
+        if topic_or_pattern.contains('*') {
+            let sender = self.pattern_topics.entry(topic_or_pattern.to_string()).or_insert_with(|| {
+                let (tx, _rx) = broadcast::channel(self.channel_capacity);
+                tx
+            });
+            sender.subscribe()
+        } else {
+            let sender = self.exact_topics.entry(topic_or_pattern.to_string()).or_insert_with(|| {
+                let (tx, _rx) = broadcast::channel(self.channel_capacity);
+                tx
+            });
+            sender.subscribe()
+        }
     }
 
     pub fn publish(&self, msg: TensorMessage) {
-        if let Some(sender) = self.topics.get(&msg.topic) {
-            let active_subscribers = sender.receiver_count();
+        let mut sent_count = 0;
+
+        if let Some(sender) = self.exact_topics.get(&msg.topic) {
             if sender.send(msg.clone()).is_ok() {
-                println!("Broadcasted to {} subscriber(s)", active_subscribers);
-            } else {
-                println!("Dropped message (no active subscribers)");
+                sent_count += sender.receiver_count();
             }
+        }
+
+        for entry in self.pattern_topics.iter() {
+            let pattern = entry.key();
+            if matches_pattern(&msg.topic, pattern) {
+                if entry.value().send(msg.clone()).is_ok() {
+                    sent_count += entry.value().receiver_count();
+                }
+            }
+        }
+
+        if sent_count > 0 {
+            println!("Routed {} to {} subscribers", msg.topic, sent_count);
         } else {
-            println!("Dropped message (Topic {} does not exist)", msg.topic);
+            println!("Dropped {} (no subscribers)", msg.topic);
         }
     }
 }
