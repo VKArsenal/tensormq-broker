@@ -26,7 +26,7 @@ jobs:
         - language: actions
           build-mode: none
         - language: rust
-          build-mode: manual
+          build-mode: none
 
     steps:
     - name: Checkout repository
