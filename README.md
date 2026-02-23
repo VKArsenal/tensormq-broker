@@ -19,9 +19,15 @@ Written completely in asynchronous Rust using Tokio, TensorMQ acts as a transpar
 ## Getting Started
 
 ### Prerequisites
-* Rust 1.70+ (`cargo`)
+* Rust 1.90+ (`cargo`)
 
-### Installation via Crates.io (Recommended)
+### Installation via Docker (Recommended)
+
+```bash
+docker pull ghcr.io/vkarsenal/tensormq-broker:latest
+```
+
+### Installation via Crates.io
 You can install the broker directly from the official Rust package registry:
 
 ```bash
