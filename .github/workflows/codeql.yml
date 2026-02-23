@@ -1,0 +1,11 @@
+- uses: actions/checkout@v4
+
+- uses: github/codeql-action/init@v3
+  with:
+    languages: rust
+    build-mode: manual
+
+- name: Build
+  run: cargo build --workspace --all-features --all-targets --verbose
+
+- uses: github/codeql-action/analyze@v3
