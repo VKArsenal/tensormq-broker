@@ -80,3 +80,8 @@ To interact with the broker, use one of the official language clients:
 
 
 To be released soon.
+
+
+## Contributions
+
+Not accepting contributions yet.
