@@ -1,14 +1,14 @@
-# TensorMQ Broker
+# TCP-MQ Broker
 
-A high-performance, zero-copy TCP message broker specifically engineered for routing multi-gigabyte machine learning tensors, model weights, and high-throughput data streams.
+A high-performance, zero-copy TCP message broker specifically engineered for routing multi-gigabyte data and high-throughput data streams.
 
-Written completely in asynchronous Rust using Tokio, TensorMQ acts as a transparent, payload-agnostic routing layer. It allows distributed training nodes and inference servers to publish and subscribe to data streams with virtually zero memory overhead.
+Written completely in asynchronous Rust using Tokio, TCP-MQ acts as a transparent, payload-agnostic routing layer. It allows distributed training nodes and inference servers to publish and subscribe to data streams with virtually zero memory overhead.
 
 ---
 
 ## Core Architecture
 
-* **Zero-Copy Routing:** Payloads are read off the network into `bytes::Bytes` structures. Routing a 10GB tensor to 8 different subscribers simply increments an atomic reference counter (`Arc`), entirely avoiding memory duplication.
+* **Zero-Copy Routing:** Payloads are read off the network into `bytes::Bytes` structures. Routing a 10GB data to 8 different subscribers simply increments an atomic reference counter (`Arc`), entirely avoiding memory duplication.
 * **Payload Agnostic:** The broker only reads the 32-byte TTP v2 header to determine routing boundaries. It does not deserialize the payload, allowing clients to send LZ4-compressed data or raw NumPy arrays transparently.
 * **Concurrent Pub/Sub:** Uses `DashMap` for lock-free topic matching and Tokio `broadcast` channels for robust, backpressure-aware 1-to-N fan-out.
 * **Advanced Routing:** Supports exact topic matching (`models/resnet/grads`) and wildcard segment matching (`models/*/grads`).
